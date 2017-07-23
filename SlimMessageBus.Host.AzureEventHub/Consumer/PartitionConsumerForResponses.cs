@@ -6,27 +6,23 @@ using SlimMessageBus.Host.Config;
 namespace SlimMessageBus.Host.AzureEventHub
 {
     /// <summary>
-    /// <see cref="EventProcessor"/> implementation meant for processing responses returning back in the request-response flows.
+    /// <see cref="PartitionConsumer"/> implementation meant for processing responses returning back in the request-response flows.
     /// </summary>
-    public class EventProcessorForResponses : EventProcessor
+    public class PartitionConsumerForResponses : PartitionConsumer
     {
-        private static readonly ILog Log = LogManager.GetLogger<EventProcessorForResponses>();
+        private static readonly ILog Log = LogManager.GetLogger<PartitionConsumerForResponses>();
 
         private readonly RequestResponseSettings _requestResponseSettings;
         private readonly ICheckpointTrigger _checkpointTrigger;
 
-        public EventProcessorForResponses(EventProcessorMaster master, RequestResponseSettings requestResponseSettings) 
-            : base(master)
+        public PartitionConsumerForResponses(EventHubMessageBus messageBus, RequestResponseSettings requestResponseSettings) 
+            : base(messageBus)
         {
             _requestResponseSettings = requestResponseSettings;
             _checkpointTrigger = new CheckpointTrigger(requestResponseSettings);
         }
 
         #region Overrides of EventProcessor
-
-        public override void Dispose()
-        {            
-        }
 
         protected override bool OnSubmit(EventData message, PartitionContext context)
         {
@@ -36,7 +32,7 @@ namespace SlimMessageBus.Host.AzureEventHub
             }
             try
             {
-                Master.MessageBus.OnResponseArrived(message.GetBytes(), _requestResponseSettings.Topic).Wait();
+                MessageBus.OnResponseArrived(message.GetBytes(), _requestResponseSettings.Topic).Wait();
             }
             catch (Exception e)
             {

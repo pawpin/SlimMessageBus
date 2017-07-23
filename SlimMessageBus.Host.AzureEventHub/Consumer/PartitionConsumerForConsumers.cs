@@ -5,19 +5,19 @@ using SlimMessageBus.Host.Config;
 namespace SlimMessageBus.Host.AzureEventHub
 {
     /// <summary>
-    /// <see cref="EventProcessor"/> implementation meant for processing messages comming to consumers (<see cref="IConsumer{TMessage}"/>) in pub-sub or handlers (<see cref="IRequestHandler{TRequest,TResponse}"/>) in request-response flows.
+    /// <see cref="PartitionConsumer"/> implementation meant for processing messages comming to consumers (<see cref="IConsumer{TMessage}"/>) in pub-sub or handlers (<see cref="IRequestHandler{TRequest,TResponse}"/>) in request-response flows.
     /// </summary>
-    public class EventProcessorForConsumers : EventProcessor
+    public class PartitionConsumerForConsumers : PartitionConsumer
     {
-        private static readonly ILog Log = LogManager.GetLogger<EventProcessorForConsumers>();
+        private static readonly ILog Log = LogManager.GetLogger<PartitionConsumerForConsumers>();
 
         private readonly ConsumerInstancePool<EventData> _instancePool;
         private readonly MessageQueueWorker<EventData> _queueWorker; 
 
-        public EventProcessorForConsumers(EventProcessorMaster master, ConsumerSettings consumerSettings)
-            : base(master)
+        public PartitionConsumerForConsumers(EventHubMessageBus messageBus, ConsumerSettings consumerSettings)
+            : base(messageBus)
         {
-            _instancePool = new ConsumerInstancePool<EventData>(consumerSettings, master.MessageBus, e => e.GetBytes());
+            _instancePool = new ConsumerInstancePool<EventData>(consumerSettings, messageBus, e => e.GetBytes());
             _queueWorker = new MessageQueueWorker<EventData>(_instancePool, new CheckpointTrigger(consumerSettings));
         }
 
@@ -25,7 +25,8 @@ namespace SlimMessageBus.Host.AzureEventHub
 
         public override void Dispose()
         {
-            _instancePool.DisposeSilently("ConsumerInstancePool", Log);
+            base.Dispose();
+            _instancePool.DisposeSilently(nameof(ConsumerInstancePool<EventData>), Log);
         }
 
         protected override bool OnSubmit(EventData message, PartitionContext context)

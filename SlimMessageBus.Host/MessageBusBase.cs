@@ -72,7 +72,6 @@ namespace SlimMessageBus.Host
             {
                 return;
             }
-            IsDisposed = true;
             IsDisposing = true;
             try
             {
@@ -81,6 +80,7 @@ namespace SlimMessageBus.Host
             finally
             {
                 IsDisposing = false;
+                IsDisposed = true;
             }
         }
 

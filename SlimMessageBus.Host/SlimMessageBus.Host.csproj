@@ -99,6 +99,7 @@
     <Compile Include="RequestResponse\MessageWithHeadersSerializer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RequestResponse\PendingRequestState.cs" />
+    <Compile Include="Utility\TaskMarker.cs" />
     <Compile Include="Utility\Utils.cs" />
   </ItemGroup>
   <ItemGroup>
