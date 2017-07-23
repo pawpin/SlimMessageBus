@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using Common.Logging;
 using Microsoft.ServiceBus.Messaging;
 using SlimMessageBus.Host.Config;
@@ -12,42 +11,31 @@ namespace SlimMessageBus.Host.AzureEventHub
     {
         private static readonly ILog Log = LogManager.GetLogger<EventProcessorForConsumers>();
 
-        private ConsumerInstancePool<EventData> _instancePool;
+        private readonly ConsumerInstancePool<EventData> _instancePool;
         private readonly MessageQueueWorker<EventData> _queueWorker; 
 
-        public EventProcessorForConsumers(EventHubConsumer consumer, ConsumerSettings consumerSettings)
-            : base(consumer)
+        public EventProcessorForConsumers(EventProcessorMaster master, ConsumerSettings consumerSettings)
+            : base(master)
         {
-            _instancePool = new ConsumerInstancePool<EventData>(consumerSettings, consumer.MessageBus, e => e.GetBytes());
-            _queueWorker = new MessageQueueWorker<EventData>(_instancePool);
-
-            if (consumerSettings.Properties.ContainsKey(Consts.CheckpointCount))
-                CheckpointCount = (int) consumerSettings.Properties[Consts.CheckpointCount];
-
-            if (consumerSettings.Properties.ContainsKey(Consts.CheckpointDuration))
-                CheckpointDuration = (int) consumerSettings.Properties[Consts.CheckpointDuration];
+            _instancePool = new ConsumerInstancePool<EventData>(consumerSettings, master.MessageBus, e => e.GetBytes());
+            _queueWorker = new MessageQueueWorker<EventData>(_instancePool, new CheckpointTrigger(consumerSettings));
         }
 
         #region Overrides of EventProcessor
 
         public override void Dispose()
         {
-            if (_instancePool != null)
-            {
-                _instancePool.DisposeSilently("TopicConsumerInstances", Log);
-                _instancePool = null;
-            }
+            _instancePool.DisposeSilently("ConsumerInstancePool", Log);
         }
 
-        protected override Task OnSubmit(EventData message)
+        protected override bool OnSubmit(EventData message, PartitionContext context)
         {
-            _queueWorker.Submit(message);
-            return Task.CompletedTask;
+            return _queueWorker.Submit(message);
         }
 
-        protected override Task<EventData> OnCommit(EventData lastMessage)
+        protected override bool OnCommit(out EventData lastGoodMessage)
         {
-            return Task.FromResult(_queueWorker.Commit(lastMessage));
+            return _queueWorker.Commit(out lastGoodMessage);
         }
 
         #endregion

@@ -64,7 +64,11 @@
     <Compile Include="Config\Fluent\TopicHandlerBuilder.cs" />
     <Compile Include="Config\IConsumerEvents.cs" />
     <Compile Include="Config\ITopicGroupConsumerSettings.cs" />
+    <Compile Include="Consumer\CheckpointSettings.cs" />
+    <Compile Include="Consumer\CheckpointTrigger.cs" />
     <Compile Include="Consumer\ConsumerInstancePool.cs" />
+    <Compile Include="Consumer\CheckpointSettingsExtensions.cs" />
+    <Compile Include="Consumer\ICheckpointTrigger.cs" />
     <Compile Include="Consumer\MessageProcessingResult.cs" />
     <Compile Include="Consumer\MessageQueueWorker.cs" />
     <Compile Include="LookupDependencyResolver.cs" />

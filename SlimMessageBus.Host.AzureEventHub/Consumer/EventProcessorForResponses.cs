@@ -1,5 +1,4 @@
 using System;
-using System.Threading.Tasks;
 using Common.Logging;
 using Microsoft.ServiceBus.Messaging;
 using SlimMessageBus.Host.Config;
@@ -14,11 +13,13 @@ namespace SlimMessageBus.Host.AzureEventHub
         private static readonly ILog Log = LogManager.GetLogger<EventProcessorForResponses>();
 
         private readonly RequestResponseSettings _requestResponseSettings;
+        private readonly ICheckpointTrigger _checkpointTrigger;
 
-        public EventProcessorForResponses(EventHubConsumer consumer, RequestResponseSettings requestResponseSettings) 
-            : base(consumer)
+        public EventProcessorForResponses(EventProcessorMaster master, RequestResponseSettings requestResponseSettings) 
+            : base(master)
         {
             _requestResponseSettings = requestResponseSettings;
+            _checkpointTrigger = new CheckpointTrigger(requestResponseSettings);
         }
 
         #region Overrides of EventProcessor
@@ -27,23 +28,41 @@ namespace SlimMessageBus.Host.AzureEventHub
         {            
         }
 
-        protected override async Task OnSubmit(EventData message)
+        protected override bool OnSubmit(EventData message, PartitionContext context)
         {
+            if (Log.IsDebugEnabled)
+            {
+                Log.DebugFormat("Message submitted: {0}", new MessageContextInfo(context, message));
+            }
             try
             {
-                await Consumer.MessageBus.OnResponseArrived(message.GetBytes(), _requestResponseSettings.Topic);
+                Master.MessageBus.OnResponseArrived(message.GetBytes(), _requestResponseSettings.Topic).Wait();
             }
             catch (Exception e)
             {
-                // ToDo: add hook to capture these situations
-                Log.ErrorFormat("Error occured while consuming response message, Offset: {0}, Topic: {1}, Group: {2}", e, message.Offset, _requestResponseSettings.Topic, _requestResponseSettings.Group);
-                // for now continue until end all messages in lease are processed
+                if (Log.IsErrorEnabled)
+                {
+                    Log.ErrorFormat("Error occured while consuming response message, {0}", e, new MessageContextInfo(context, message));
+                }
+
+                // We can only continue and process all messages in the lease    
+
+                if (_requestResponseSettings.OnResponseMessageFault != null)
+                {
+                    // Call the hook
+                    Log.DebugFormat("Executing the attached hook from {0}", nameof(_requestResponseSettings.OnResponseMessageFault));
+                    _requestResponseSettings.OnResponseMessageFault(_requestResponseSettings, message, e);
+                }
             }
+            return _checkpointTrigger.Increment();
         }
 
-        protected override Task<EventData> OnCommit(EventData lastMessage)
+        protected override bool OnCommit(out EventData lastGoodMessage)
         {
-            return Task.FromResult(lastMessage); 
+            Log.Debug("Commiting...");
+            _checkpointTrigger.Reset();
+            lastGoodMessage = null;
+            return true;
         }
 
         #endregion

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using Common.Logging;
 using Microsoft.ServiceBus.Messaging;
@@ -11,16 +10,11 @@ namespace SlimMessageBus.Host.AzureEventHub
     {
         private static readonly ILog Log = LogManager.GetLogger<EventProcessor>();
 
-        protected readonly EventHubConsumer Consumer;
-        private int _lastCheckpointCount;
-        private readonly Stopwatch _lastCheckpointDuration = new Stopwatch();
+        protected readonly EventProcessorMaster Master;
 
-        protected int CheckpointCount = Consts.CheckpointCountDefault;
-        protected int CheckpointDuration = Consts.CheckpointDurationDefault;
-
-        protected EventProcessor(EventHubConsumer consumer)
+        protected EventProcessor(EventProcessorMaster master)
         {
-            Consumer = consumer;            
+            Master = master;
         }
 
         #region Implementation of IDisposable
@@ -34,10 +28,6 @@ namespace SlimMessageBus.Host.AzureEventHub
         public Task OpenAsync(PartitionContext context)
         {
             Log.DebugFormat("Open lease: {0}", new PartitionContextInfo(context));
-
-            _lastCheckpointCount = 0;
-            _lastCheckpointDuration.Start();
-
             return Task.CompletedTask;
         }
 
@@ -49,56 +39,76 @@ namespace SlimMessageBus.Host.AzureEventHub
 
             foreach (var message in messages)
             {
-                if (!Consumer.CanRun)
+                if (!Master.CanRun)
                 {
                     break;
                 }
 
-                await OnSubmit(message);
                 lastMessage = message;
-                _lastCheckpointCount++;
 
-                if (_lastCheckpointCount >= CheckpointCount || _lastCheckpointDuration.ElapsedMilliseconds > CheckpointDuration)
+                lastCheckpointMessage = await CheckpointSafe(message, context);
+                if (!ReferenceEquals(lastCheckpointMessage, message))
                 {
-                    lastCheckpointMessage = await Checkpoint(message, context);
                     // something went wrong (not all messages were processed with success)
-                    skipLastCheckpoint = lastCheckpointMessage != message;
+
+                    // ToDo: add retry support
+                    //skipLastCheckpoint = !ReferenceEquals(lastCheckpointMessage, message);
+                    //skipLastCheckpoint = false;
                 }
             }
 
-            if (!skipLastCheckpoint && lastCheckpointMessage != lastMessage && lastMessage != null)
+            if (!skipLastCheckpoint)
             {
-                // checkpoint the last message (if all was succesful until now)
-                await Checkpoint(lastMessage, context);
+                // checkpoint the last messages
+                if ((!ReferenceEquals(lastCheckpointMessage, lastMessage) && lastMessage != null))
+                {
+                    await CheckpointSafe(lastMessage, context);
+                }
             }
         }
 
-        private async Task<EventData> Checkpoint(EventData message, PartitionContext context)
+        private async Task<EventData> CheckpointSafe(EventData message, PartitionContext context)
         {
-            var messageToCheckpoint = await OnCommit(message);
+            EventData lastGoodMessage;
+            EventData lastCheckpointMessage;
 
+            if (OnCommit(out lastGoodMessage))
+            {
+                // all messages were successful
+                lastCheckpointMessage = message;
+            }
+            else
+            {
+                // something went wrong (not all messages were processed with success)
+
+                // checkpoint all the succeeded messages (in order) until the first failed one
+                lastCheckpointMessage = lastGoodMessage;
+
+                // call the hook of all the ones that failed
+                // ToDo: call the hook
+            }
+            if (lastCheckpointMessage != null)
+            {
+                await Checkpoint(lastCheckpointMessage, context);
+            }
+            return lastCheckpointMessage;
+        }
+
+        private async Task Checkpoint(EventData message, PartitionContext context)
+        {
             Log.DebugFormat("Will checkpoint at Offset: {0}, {1}", message.Offset, new PartitionContextInfo(context));
-            await context.CheckpointAsync(messageToCheckpoint);
-
-            _lastCheckpointCount = 0;
-            _lastCheckpointDuration.Restart();            
-
-            return messageToCheckpoint;
+            await context.CheckpointAsync(message);
         }
 
         public Task CloseAsync(PartitionContext context, CloseReason reason)
         {
             Log.DebugFormat("Close lease: Reason: {0}, {1}", reason, new PartitionContextInfo(context));
-
-            _lastCheckpointCount = 0;
-            _lastCheckpointDuration.Stop();
-
             return Task.CompletedTask;
         }
 
         #endregion
 
-        protected abstract Task OnSubmit(EventData message);
-        protected abstract Task<EventData> OnCommit(EventData lastMessage);
+        protected abstract bool OnSubmit(EventData message, PartitionContext context);
+        protected abstract bool OnCommit(out EventData lastGoodMessage);
     }
 }

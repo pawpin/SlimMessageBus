@@ -60,16 +60,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Consumer\IKafkaCommitController.cs" />
+    <Compile Include="Consumer\IKafkaTopicProcessor.cs" />
+    <Compile Include="Consumer\MessageContextInfo.cs" />
     <Compile Include="KafkaConfigKeys.cs" />
     <Compile Include="Consumer\KafkaGroupConsumer.cs" />
-    <Compile Include="Consumer\KafkaGroupConsumerBase.cs" />
     <Compile Include="KafkaConfigValues.cs" />
     <Compile Include="KafkaMessageBus.cs" />
     <Compile Include="KafkaMessageBusBuilderExtensions.cs" />
     <Compile Include="KafkaMessageBusSettings.cs" />
     <Compile Include="Consumer\KafkaResponseConsumer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Consumer\TopicConsumerInstances.cs" />
+    <Compile Include="Consumer\KafkaTopicConsumer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

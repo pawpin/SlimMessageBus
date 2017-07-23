@@ -162,7 +162,6 @@ namespace SlimMessageBus.Host
             await Publish(messageType, payload, topic);
         }
 
-
         #region Implementation of IPublishBus
 
         public virtual async Task Publish<TMessage>(TMessage message, string topic = null)

@@ -19,7 +19,7 @@ namespace SlimMessageBus.Host.AzureEventHub
         public EventHubMessageBusSettings EventHubSettings { get; }
 
         private readonly SafeDictionaryWrapper<string, EventHubClient> _producersByTopic = new SafeDictionaryWrapper<string, EventHubClient>(); 
-        private readonly List<EventHubConsumer> _consumers = new List<EventHubConsumer>();
+        private readonly List<EventProcessorMaster> _consumers = new List<EventProcessorMaster>();
 
         public EventHubMessageBus(MessageBusSettings settings, EventHubMessageBusSettings eventHubSettings)
             : base(settings)
@@ -37,14 +37,14 @@ namespace SlimMessageBus.Host.AzureEventHub
             {
                 Log.InfoFormat("Creating consumer for Topic: {0}, Group: {1}, MessageType: {2}", consumerSettings.Topic, consumerSettings.Group, consumerSettings.MessageType);
                 //var consumer = new EventHubConsumer(this, group, messageType, subscribersByMessageType.ToList());
-                _consumers.Add(new EventHubConsumer(this, consumerSettings));
+                _consumers.Add(new EventProcessorMaster(this, consumerSettings));
             }
 
             if (settings.RequestResponse != null)
             {
                 Log.InfoFormat("Creating response consumer for Topic: {0}, Group: {1}", settings.RequestResponse.Topic, settings.RequestResponse.Group);
                 // _consumers.Add(new EvenHubResponseConsumer(this, settings.RequestResponse));
-                _consumers.Add(new EventHubConsumer(this, settings.RequestResponse));
+                _consumers.Add(new EventProcessorMaster(this, settings.RequestResponse));
             }
         }
 

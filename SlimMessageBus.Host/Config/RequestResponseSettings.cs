@@ -5,7 +5,7 @@ namespace SlimMessageBus.Host.Config
     /// <summary>
     /// The request/response settings.
     /// </summary>
-    public class RequestResponseSettings : ITopicGroupConsumerSettings, IConsumerEvents
+    public class RequestResponseSettings : HasProviderExtensions, ITopicGroupConsumerSettings, IConsumerEvents
     {
         /// <summary>
         /// Individual topic that will act as a the private reply queue for the app domain.
@@ -32,6 +32,11 @@ namespace SlimMessageBus.Host.Config
         public Action<ConsumerSettings, object, Exception> OnMessageFault { get; set; }
 
         #endregion
+
+        /// <summary>
+        /// Called whenever an incomming response message errors out.
+        /// </summary>
+        public Action<RequestResponseSettings, object, Exception> OnResponseMessageFault { get; set; }
 
         public RequestResponseSettings()
         {

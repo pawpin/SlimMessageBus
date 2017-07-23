@@ -1,4 +1,5 @@
 using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ namespace SlimMessageBus.Host.Kafka
         public KafkaMessageBusSettings KafkaSettings { get; }
 
         private Producer _producer;
-        private readonly IList<KafkaGroupConsumerBase> _groupConsumers = new List<KafkaGroupConsumerBase>();
+        private readonly IList<KafkaGroupConsumer> _groupConsumers = new List<KafkaGroupConsumer>();
 
         public Producer CreateProducer()
         {
@@ -42,26 +43,45 @@ namespace SlimMessageBus.Host.Kafka
             _producer = CreateProducer();
             Log.InfoFormat("Producer has been assigned name: {0}", _producer.Name);
 
-            Log.Info("Creating subscribers");
-            foreach (var subscribersByGroup in settings.Consumers.GroupBy(x => x.Group))
+            Log.Info("Creating consumers");
+            foreach (var consumersByGroup in settings.Consumers.GroupBy(x => x.Group))
             {
-                var group = subscribersByGroup.Key;
+                var group = consumersByGroup.Key;
 
-                foreach (var subscribersByMessageType in subscribersByGroup.GroupBy(x => x.MessageType))
+                var topicProcessors = consumersByGroup.Select(cs =>
                 {
-                    var messageType = subscribersByMessageType.Key;
+                    Log.InfoFormat("Creating {0} for Topic: {1}, Group: {2}, MessageType: {3}", nameof(KafkaTopicConsumer), cs.Topic, cs.Group, cs.MessageType);
+                    return new KafkaTopicConsumer(cs, this);
+                }).ToList();
 
-                    Log.InfoFormat("Creating consumer for topics {0}, group {1}, message type {2}", string.Join(",", subscribersByMessageType.Select(x => x.Topic)), group, messageType);
-                    var consumer = new KafkaGroupConsumer(this, group, messageType, subscribersByMessageType.ToList());
-                    _groupConsumers.Add(consumer);
-                }
+                AddGroupConsumer(settings, group, topicProcessors);
             }
 
             if (settings.RequestResponse != null)
             {
-                Log.InfoFormat("Creating response consumer for topic {0} and group {1}", settings.RequestResponse.Group, settings.RequestResponse.Topic);
-                _groupConsumers.Add(new KafkaResponseConsumer(this, settings.RequestResponse));
+                Log.InfoFormat("Creating {0} for Topic: {1} and Group: {2}", nameof(KafkaResponseConsumer), settings.RequestResponse.Group, settings.RequestResponse.Topic);
+                var responseProcessor = new KafkaResponseConsumer(settings.RequestResponse, this);
+
+                AddGroupConsumer(settings, settings.RequestResponse.Group, new[] { responseProcessor });
             }
+
+            Start();
+        }
+
+        private void Start()
+        {
+            Log.Info("Starting group consumers...");
+            foreach (var groupConsumer in _groupConsumers)
+            {
+                groupConsumer.Start();
+            }
+            Log.Info("Group consumers started");
+        }
+
+        private void AddGroupConsumer(MessageBusSettings settings, string group, IEnumerable<IKafkaTopicProcessor> processors)
+        {
+            Log.InfoFormat("Creating {0} for Group: {1}", group, nameof(KafkaGroupConsumer));
+            _groupConsumers.Add(new KafkaGroupConsumer(this, group, processors));
         }
 
         private static void AssertSettings(MessageBusSettings settings)
@@ -70,6 +90,9 @@ namespace SlimMessageBus.Host.Kafka
             {
                 Assert.IsTrue(settings.RequestResponse.Group != null,
                     () => new InvalidConfigurationMessageBusException($"Request-response: group was not provided"));
+
+                Assert.IsTrue(settings.Consumers.All(x => x.Group != settings.RequestResponse.Group),
+                    () => new InvalidConfigurationMessageBusException($"Request-response: group cannot be shared with consumer groups"));
             }
         }
 
