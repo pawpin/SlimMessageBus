@@ -1,7 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace SlimMessageBus.Host.Utility
+namespace SlimMessageBus.Host
 {
     public class TaskMarker
     {

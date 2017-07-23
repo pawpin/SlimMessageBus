@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Common.Logging;
 using Microsoft.ServiceBus.Messaging;
-using SlimMessageBus.Host.Utility;
 
 namespace SlimMessageBus.Host.AzureEventHub
 {
